@@ -31,8 +31,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="app.js" />
+    <Compile Include="public\helpers\http.js" />
     <Compile Include="routes\index.js" />
-    <Compile Include="routes\users.js" />
     <None Include="gcbilling - Web Deploy.pubxml" />
     <None Include="gcbilling - FTP.pubxml" />
     <Content Include="package.json" />
@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="public\" />
+    <Folder Include="public\helpers\" />
     <Folder Include="public\images\" />
     <Folder Include="public\javascripts\" />
     <Folder Include="public\stylesheets\" />
