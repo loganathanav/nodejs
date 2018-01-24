@@ -3,35 +3,37 @@ var express = require('express');
 var router = express.Router();
 
 var http = require('../public/helpers/http');
-const url ="https://cloudpricingcalculator.appspot.com/static/data/pricelist.json";
+var constants = require('../public/helpers/constants');
+const url = "https://cloudpricingcalculator.appspot.com/static/data/pricelist.json";
 
 const datatype = 'json';
 var totalHoursInMonth = (365 / 12) * 24;
 var sustainedUseDiscount = 30;
-/* GET home page. */
-router.get('/', function (req, res) {
-  
+var globalLocation = 'us';
+
+router.get('/',  (req, res) => {
+
     var finalResult = calculatePrices();
- 
+
     res.send(finalResult);
 });
 
-router.post('/', function(req, res){
+router.post('/',  (req, res) => {
     var finalResult = calculatePrices();
 
     res.send(finalResult);
-    
+
 });
 var calculatedobject = null;
 
-var calculatePrices = function() {
-   
+var calculatePrices = () => {
+
     http.get(url, {}, datatype, successcallback, null);
 
     return calculatedobject;
 }
 
-var successcallback = function (result) {
+var successcallback = (result) => {
     var location = "us";
     calculatedobject = {};
 
@@ -93,14 +95,83 @@ var successcallback = function (result) {
 
 
     computeenginecost["CP-COMPUTEENGINE-OS"] = calculateComputeOSPrice(priceList, "CP-COMPUTEENGINE-OS");
-    
+
 
 
     calculatedobject["compute-engine"] = computeenginecost;
-      
+
+
+    calculatedobject[constants.appEngine.appEngineStandardInstance] = calculateAppEngineStandardInstancePrice(priceList, 2);
+    calculatedobject[constants.appEngine.appEngineFlexibleInstance] = calculateAppEngineFlexibleInstancePrice(priceList, 1, 1, 1);
+    calculatedobject[constants.appEngine.appEngineApisServices] = calculateAppEngineAPIsServicesCost(priceList);
 }
 
-var calculateComputeOSPrice = function (priceList, computeName) {
+var calculateAppEngineAPIsServicesCost = (priceList) => {
+    let appenginceapicost = {};
+
+
+    appenginceapicost[constants.totalEstimatedCostPerMonth] = 0;
+
+    return appenginceapicost;
+}
+
+var calculateAppEngineFlexibleInstancePrice = (priceList, noOfCores, noOfMemoryInGB, noOfPersistentInGB) => {
+    let flexappengincecost = {};
+    let flexCore = priceList[constants.labels.CP_GAE_FLEX_INSTANCE_CORE_HOURS];
+    let flexRAM = priceList[constants.labels.CP_GAE_FLEX_INSTANCE_RAM];
+    let flexStoragePD = priceList[constants.labels.CP_GAE_FLEX_STORAGE_PD_CAPACITY];
+
+    let coreCpuHourlyPrice = flexCore[globalLocation], ramHourlyPrice = flexRAM[globalLocation], storagePDMonthyPrice = flexStoragePD[globalLocation], totalFlexiblePrice = 0;
+
+    let totalCorePrice = (noOfCores * totalHoursInMonth) * coreCpuHourlyPrice;
+    let totalRAMPrice = (noOfMemoryInGB * totalHoursInMonth) * ramHourlyPrice;
+    let totalPDPrice = noOfPersistentInGB * storagePDMonthyPrice;
+
+    totalFlexiblePrice = totalCorePrice + totalRAMPrice + totalPDPrice;
+
+    flexappengincecost["noOfCoresCpus"] = noOfCores;
+    flexappengincecost["noOfMemoryInGB"] = noOfMemoryInGB;
+    flexappengincecost["noOfPersistentDiskInGB"] = noOfPersistentInGB;
+    flexappengincecost["coreCPUsPrice"] = totalCorePrice.toFixed(4);
+    flexappengincecost["memoryPrice"] = totalRAMPrice.toFixed(4);
+    flexappengincecost["persistentDiskPrice"] = totalPDPrice.toFixed(4);
+    flexappengincecost[constants.totalEstimatedCostPerMonth] = totalFlexiblePrice.toFixed(2);
+    flexappengincecost["description"] = "App Engine flexible environment instances";
+
+    return flexappengincecost;
+}
+
+var calculateAppEngineStandardInstancePrice = (priceList, noOfInstances) => {
+    let appengincecost = {};
+    let appengine = priceList["CP-APP-ENGINE-INSTANCES"];
+    let freeQuota = 0, hourlyPrice = appengine[globalLocation];
+    if (appengine["freequota"]) {
+        freeQuota = calculateFreeQuotaQuantity(appengine["freequota"]);
+    }
+    let totalInstanceHours = noOfInstances * totalHoursInMonth;
+    let priceableUsage = totalInstanceHours - freeQuota;
+
+    let monthlyCost = (hourlyPrice * priceableUsage).toFixed(2);
+
+    appengincecost["noOfInstances"] = noOfInstances;
+    appengincecost[constants.totalEstimatedCostPerMonth] = monthlyCost;
+    appengincecost["description"] = "App Engine standard environment instances"
+    appengincecost["totalInstanceHours"] = totalInstanceHours;
+    appengincecost["freeQuotaHours"] = freeQuota;
+
+    return appengincecost;
+}
+
+var calculateFreeQuotaQuantity = (freequota) => {
+    let quantity = 0;
+    if (freequota["quantity"]) {
+        quantity = freequota["quantity"];
+    }
+
+    return quantity;
+}
+
+var calculateComputeOSPrice = (priceList, computeName) => {
     var priceCalculated = [];
     var computePlan = priceList[computeName];
 
@@ -109,7 +180,7 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "windows";
         osObject["description"] = "Windows Server 2008r2, Windows Server 2012r2, Windows Server 2016, Windows Core";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
     if (computePlan["rhel"]) {
@@ -117,7 +188,7 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "redhatlinux";
         osObject["description"] = "Red Hat Enterprise Linux";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
     if (computePlan["suse"]) {
@@ -125,7 +196,7 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "suse";
         osObject["description"] = "SUSE";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
 
@@ -134,7 +205,7 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "suse-sap";
         osObject["description"] = "SLES for SAP";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
     if (computePlan["sql-standard"]) {
@@ -142,7 +213,7 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "sql-standard";
         osObject["description"] = "SQL Server Standard (2012, 2014, 2016)";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
     if (computePlan["sql-web"]) {
@@ -150,7 +221,7 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "sql-web";
         osObject["description"] = "SQL Server Web (2012, 2014, 2016)";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
     if (computePlan["sql-enterprise"]) {
@@ -158,13 +229,14 @@ var calculateComputeOSPrice = function (priceList, computeName) {
         let osObject = {};
         osObject["os"] = "sql-enterprise";
         osObject["description"] = "SQL Server Enterprise (2012, 2014, 2016)";
-        osObject["cost"] = (os["low"] * totalHoursInMonth).toFixed(2);
+        osObject[constants.totalEstimatedCostPerMonth] = (os["low"] * totalHoursInMonth).toFixed(2);
         priceCalculated.push(osObject);
     }
 
     return priceCalculated;
 }
-var calculateComputePrice = function (priceList, computeName, location) {
+
+var calculateComputePrice = (priceList, computeName, location) => {
     var priceCalculated = {};
     var computePlan = priceList[computeName];
     var hourlyPrice = computePlan[location];
@@ -176,7 +248,7 @@ var calculateComputePrice = function (priceList, computeName, location) {
     priceCalculated["total-hours-per-month"] = totalHoursInMonth;
     priceCalculated["sustained-use-discount"] = sustainedUseDiscount + " %";
     priceCalculated["effective-hourly-price"] = hourlyPrice.toFixed(4);
-    priceCalculated["estimated-component-cost"] = monthlyPrice;
+    priceCalculated[constants.totalEstimatedCostPerMonth] = monthlyPrice;
 
     if (computePlan["cores"]) {
         priceCalculated["cores"] = computePlan["cores"];

@@ -31,6 +31,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="app.js" />
+    <Compile Include="public\helpers\constants.js" />
     <Compile Include="public\helpers\http.js" />
     <Compile Include="routes\index.js" />
     <None Include="gcbilling - Web Deploy.pubxml" />
